@@ -1,0 +1,23 @@
+# Equal-weight, cross-sector basket of large-cap US names:
+# tech (AAPL, MSFT), bank (JPM), energy (XOM), healthcare (JNJ), staples (PG).
+portfolio:
+  tickers: [AAPL, MSFT, JPM, XOM, JNJ, PG]
+  weights: equal          # or an explicit list summing to 1
+  value: 1_000_000        # notional in USD
+
+start: "2015-01-01"
+end: "2024-12-31"
+
+var:
+  confidence_levels: [0.95, 0.99]
+  horizon_days: 1
+
+backtest:
+  window: 500
+
+monte_carlo:
+  n_sims: 50_000
+  seed: 42
+
+stress:
+  window: ["2008-09-01", "2009-03-31"]   # GFC; COVID alternative: ["2020-02-15", "2020-04-30"]
