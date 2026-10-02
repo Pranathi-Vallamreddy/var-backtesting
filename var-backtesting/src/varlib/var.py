@@ -34,6 +34,21 @@ def var_param(returns, w, alpha, value):
     return var, es
 
 
+def var_mc(returns, w, alpha, value, n_sims=50_000, seed=42):
+    """Monte Carlo VaR from a multivariate normal fitted to the window.
+
+    Draws x = mu + L z with L the Cholesky factor of the covariance matrix
+    (not the correlation matrix, which would lose the asset volatilities),
+    then reads VaR/ES off the simulated portfolio returns as in var_hist.
+    """
+    mu = np.asarray(returns.mean())
+    cov = np.atleast_2d(np.cov(np.asarray(returns), rowvar=False))
+    L = np.linalg.cholesky(cov)
+    z = np.random.default_rng(seed).standard_normal((n_sims, len(mu)))
+    x = mu + z @ L.T
+    return var_hist(x @ w, alpha, value)
+
+
 def var_t(returns, w, alpha, value, nu=5.0):
     """Student-t variance-covariance VaR.
 
