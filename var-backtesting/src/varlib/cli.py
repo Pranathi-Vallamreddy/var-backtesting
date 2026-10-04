@@ -18,6 +18,8 @@ RESULTS = Path("results")
 def load(config_path):
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
+    if cfg["var"]["horizon_days"] != 1:
+        raise SystemExit("only a 1-day horizon is implemented (var.horizon_days: 1)")
     tickers = cfg["portfolio"]["tickers"]
     w = resolve_weights(cfg["portfolio"]["weights"], tickers)
     returns = log_returns(load_prices(tickers, cfg["start"], cfg["end"]))

@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 from scipy import stats
 
-from varlib.var import var_hist, var_mc, var_param, var_t
+from varlib.var import ewma_sigma, var_ewma, var_fhs, var_hist, var_mc, var_param, var_t
 
 V = 1e6
 
@@ -88,3 +88,45 @@ def test_t_var_exceeds_gaussian_at_99():
     var_g, es_g = var_param(r, w, 0.99, V)
     var_t5, es_t5 = var_t(r, w, 0.99, V, nu=5)
     assert var_t5 > var_g and es_t5 > es_g
+
+
+def test_t_rejects_nu_without_finite_variance():
+    with pytest.raises(ValueError):
+        var_t(gaussian_returns(100), np.array([1.0]), 0.99, V, nu=2.0)
+
+
+def test_ewma_recursion_by_hand():
+    r = np.array([0.01, -0.02, 0.03])
+    lam = 0.9
+    s2 = r.var()
+    for x in r:
+        s2 = lam * s2 + (1 - lam) * x**2
+    assert ewma_sigma(r, lam)[-1] == pytest.approx(np.sqrt(s2))
+    var, _ = var_ewma(r, 0.99, V, lam)
+    assert var == pytest.approx(stats.norm.ppf(0.99) * np.sqrt(s2) * V)
+
+
+def test_ewma_on_portfolio_equals_ewma_covariance():
+    rng = np.random.default_rng(4)
+    X = rng.multivariate_normal([0, 0], [[1e-4, 3e-5], [3e-5, 2e-4]], size=300)
+    w = np.array([0.6, 0.4])
+    lam = 0.94
+    S = np.cov(X, rowvar=False, ddof=0)  # seed so that w'S0w equals var(w'x)
+    for x in X:
+        S = lam * S + (1 - lam) * np.outer(x, x)
+    assert ewma_sigma(X @ w, lam)[-1] == pytest.approx(np.sqrt(w @ S @ w))
+
+
+def test_fhs_rescales_to_current_volatility():
+    # same shocks, but the last 50 days at twice the volatility: FHS VaR
+    # should rise well above plain historical VaR on the same sample
+    r = gaussian_returns(1_000)["a"].to_numpy()
+    r[-50:] *= 2
+    var_h, _ = var_hist(r, 0.99, V)
+    var_f, _ = var_fhs(r, 0.99, V)
+    assert var_f > 1.4 * var_h
+
+
+def test_fhs_scales_linearly():
+    r = gaussian_returns(500)["a"].to_numpy()
+    assert var_fhs(3 * r, 0.99, V)[0] == pytest.approx(3 * var_fhs(r, 0.99, V)[0])

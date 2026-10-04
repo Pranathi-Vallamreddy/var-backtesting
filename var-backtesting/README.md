@@ -1,8 +1,11 @@
 # var-backtesting
 
+[![tests](https://github.com/Pranathi-Vallamreddy/var-backtesting/actions/workflows/tests.yml/badge.svg)](https://github.com/Pranathi-Vallamreddy/var-backtesting/actions/workflows/tests.yml)
+
 1-day Value-at-Risk and Expected Shortfall for a six-stock equity portfolio,
-using historical simulation, variance-covariance (Gaussian and Student-t) and
-Monte Carlo, with a rolling out-of-sample backtest and stressed VaR.
+with a rolling out-of-sample backtest and stressed VaR. Methods: historical
+simulation, variance-covariance (Gaussian and Student-t), Monte Carlo, EWMA
+(RiskMetrics) and filtered historical simulation.
 
 The portfolio is $1m equally weighted in AAPL, MSFT, JPM, XOM, JNJ and PG
 (tech, banks, energy, healthcare, staples), 2015-2024. Everything is set in
@@ -27,53 +30,66 @@ python -m varlib.cli --config config/portfolio.yaml stress     # stressed vs cur
 ```
 
 The backtest re-estimates every model on each of ~2,000 days and takes about a
-minute, almost all of it Monte Carlo.
+minute.
 
 ## Results
 
 Rolling 500-day estimation window, forecasts from 2016-12-28 to 2024-12-31
-(2,015 days). Expected exceptions: 100.8 at 95%, 20.2 at 99%.
+(2,015 days). Expected exceptions: 100.8 at 95%, 20.2 at 99%. Tests at 5%.
 
-| 99% VaR | Exceptions | Kupiec p | Christoffersen p | Cond. coverage p | Basel, last 250d | Basel, worst 250d |
-|---|---|---|---|---|---|---|
-| Historical | 29 | 0.063 | 0.007 | 0.005 | green (2) | red (12) |
-| Student-t (nu=5) | 45 | <0.001 | <0.001 | <0.001 | green (2) | red (17) |
-| Gaussian | 50 | <0.001 | <0.001 | <0.001 | green (3) | red (18) |
-| Monte Carlo | 50 | <0.001 | <0.001 | <0.001 | green (3) | red (18) |
+| 99% VaR | Exceptions | Kupiec p | Christoffersen p | Cond. coverage p | Loss / ES on exception days | Basel, last 250d | Basel, worst 250d |
+|---|---|---|---|---|---|---|---|
+| Filtered HS | 23 | 0.53 | 0.26 | 0.44 | 25.0k / 25.5k | yellow (5) | yellow (6) |
+| Historical | 29 | 0.063 | 0.007 | 0.005 | 41.3k / 39.6k | green (2) | red (12) |
+| EWMA | 43 | <0.001 | 0.32 | <0.001 | 31.2k / 26.5k | yellow (6) | red (12) |
+| Student-t (nu=5) | 45 | <0.001 | <0.001 | <0.001 | 36.0k / 31.7k | green (2) | red (17) |
+| Gaussian | 50 | <0.001 | <0.001 | <0.001 | 34.5k / 24.3k | green (3) | red (18) |
+| Monte Carlo | 50 | <0.001 | <0.001 | <0.001 | 34.5k / 24.1k | green (3) | red (18) |
 
-At 95% all four methods pass Kupiec (99-107 exceptions, p between 0.53 and
-0.86) and all four fail independence (p < 0.001).
+At 95% every method passes Kupiec, but only EWMA (106 exceptions, conditional
+coverage p = 0.85) and filtered HS (112, p = 0.41) pass independence; the four
+equal-weighted methods all have p < 0.001.
 
-No method passes conditional coverage at 99%. Historical simulation is the
-only one whose exception count is not rejected, and only just. The Gaussian
-model has 2.5 times the expected exceptions, and on the days it is breached
-the average loss is $34k against a forecast ES of $24k, so it understates
-both the quantile and the tail beyond it. Monte Carlo matches Gaussian almost
-exactly, as it should, since it samples from the same fitted normal. The
-Student-t sits between the two. On 99% historical exception days the average
-loss ($41k) is close to its ES ($40k).
+The four methods that weight the window equally fail for two separate
+reasons, and the two volatility-updating methods isolate them:
+
+- **Volatility clustering.** A 500-day equally weighted window reacts too
+  slowly when volatility jumps, so exceptions arrive in runs and every
+  equal-weighted method fails Christoffersen. EWMA fixes this (independence
+  p = 0.32) but keeps the Gaussian tail and has twice the expected exceptions
+  at 99%.
+- **Fat tails.** The Gaussian model has 2.5 times the expected 99% exceptions,
+  and on those days the average loss is $34.5k against a forecast ES of
+  $24.3k. Monte Carlo matches it, as it should, since it samples the same
+  fitted normal. Historical simulation gets the tail shape right (loss $41.3k
+  vs ES $39.6k) but not the timing.
+
+Filtered historical simulation combines the two, empirical tail scaled to
+EWMA volatility, and is the only method that passes all three tests at both
+confidence levels. Its ES also matches realised tail losses. The cost is
+stability: its 99% VaR went from about $20k to $200k within a month in March
+2020, so any capital tied to it would swing the same way. It is also in the
+yellow zone over the last 250 days, because 2024 was calm enough that EWMA
+volatility fell low and moderate losses breached it.
 
 ![Realised loss vs 99% VaR](results/var_vs_loss_99.png)
 
-Exceptions cluster in four episodes: February-April 2018, October-December
-2018, February-March 2020 (10 of the Gaussian model's 50 fall in March 2020
-alone), and April-October 2022. In each, volatility rose faster than a 500-day
-equally weighted window can follow, so breaches arrive in runs and every
-method fails the independence test. Historical VaR also shows the window's
-ghosting effect: it steps up when March 2020 enters the sample and stays
-there until those days roll out two years later, regardless of conditions in
-2021.
+Equal-weighted exceptions cluster in four episodes: February-April 2018,
+October-December 2018, February-March 2020 (10 of the Gaussian model's 50 in
+March 2020 alone), and April-October 2022. Historical VaR also shows the
+window's ghosting effect: it steps up when March 2020 enters the sample and
+stays there until those days roll out two years later.
 
 ![Rolling 250-day exception count](results/rolling_exceptions_99.png)
 
-Over the last 250 days every method is in the Basel green zone, but each spent
-long stretches in the red, so the last-250-day reading on its own overstates
-how well these models perform.
+The equal-weighted methods are all green over the last 250 days but each
+spent long stretches in the red, so the last-250-day reading on its own
+overstates how well they work.
 
 ![Return distribution vs normal](results/return_tails.png)
 
-Stressed VaR, calibrated to Sep 2008 - Mar 2009 (145 days), compared with the
-most recent 500 days:
+Stressed VaR, calibrated to Sep 2008 - Mar 2009 (145 days), against the most
+recent 500 days:
 
 | 99% | Current VaR | Stressed VaR | Ratio |
 |---|---|---|---|
@@ -82,32 +98,35 @@ most recent 500 days:
 | Student-t | 16,678 | 94,156 | 5.6 |
 | Monte Carlo | 14,704 | 83,993 | 5.7 |
 
-The ratios are high partly because 2023-24 was a calm period. With 145
-observations the 99% historical figure rests on one or two days.
+The ratios are high partly because 2023-24 was calm. With 145 observations
+the 99% historical figure rests on one or two days. EWMA and FHS are not
+shown, since they condition on end-of-window volatility rather than the
+period as a whole.
 
 ## Assumptions
 
-- Returns are i.i.d. within each estimation window; all observations get equal
-  weight.
+- Within the window, standardised returns are i.i.d. For the four
+  equal-weighted methods the raw returns are, which is the assumption the
+  backtest rejects.
 - Constant notional and fixed weights, rebalanced daily. Portfolio return is
   the weighted sum of log returns, a first-order approximation.
 - Adjusted closes, so dividends are treated as reinvested.
 - 1-day horizon only; no square-root-of-time scaling.
-- Parametric and Monte Carlo use the sample mean. Over 500 days it is small
-  next to sigma but not zero, and it slightly lowers VaR.
+- Gaussian, Student-t and Monte Carlo use the sample mean; EWMA and FHS use
+  zero, as in RiskMetrics.
 
 ## Limitations
 
-- No volatility model (EWMA or GARCH). This is the main reason the backtests
-  fail independence, and the obvious next step.
+- EWMA uses the RiskMetrics lambda = 0.94 rather than an estimated one, and
+  there is no GARCH model to compare against.
 - Equity only, linear positions. No options, so no gamma or vega, and
   delta-normal is exact here only because the book is linear.
-- Gaussian and Monte Carlo VaR understate tail risk, as the results show. The
-  Monte Carlo draws are multivariate normal, so it adds nothing beyond the
-  Gaussian model here; it would matter with non-linear positions.
-- The Student-t uses a fixed nu=5. An MLE fit on the full sample gives about
-  2.8, close to the point where the variance is undefined, so the fixed value
-  is a pragmatic choice rather than an estimate.
+- Monte Carlo draws are multivariate normal, so here it adds nothing beyond
+  the Gaussian model; it would matter with non-linear positions.
+- The Student-t uses a fixed nu = 5. An MLE fit on the full sample gives about
+  2.8, close to where the variance is undefined, so the fixed value is a
+  pragmatic choice rather than an estimate.
+- The ES check is a comparison of averages, not a formal ES backtest.
 - No liquidity horizon, transaction costs, FX, or intraday risk.
 - Stress windows are short (145 days for the GFC, about 50 for COVID), so
   stressed historical VaR is indicative only.
