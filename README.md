@@ -105,9 +105,9 @@ period as a whole.
 
 ## Assumptions
 
-- Within the window, standardised returns are i.i.d. For the four
-  equal-weighted methods the raw returns are, which is the assumption the
-  backtest rejects.
+- The four equal-weighted methods assume returns are i.i.d. within the
+  window; the backtest rejects this. EWMA and FHS assume only that returns
+  scaled by their EWMA volatility are i.i.d.
 - Constant notional and fixed weights, rebalanced daily. Portfolio return is
   the weighted sum of log returns, a first-order approximation.
 - Adjusted closes, so dividends are treated as reinvested.
@@ -117,8 +117,9 @@ period as a whole.
 
 ## Limitations
 
-- EWMA uses the RiskMetrics lambda = 0.94 rather than an estimated one, and
-  there is no GARCH model to compare against.
+- EWMA and FHS use the RiskMetrics default lambda = 0.94. It was not tuned on
+  this backtest, so the FHS result is not fitted to the sample, but nor is
+  lambda estimated, and there is no GARCH model to compare against.
 - Equity only, linear positions. No options, so no gamma or vega, and
   delta-normal is exact here only because the book is linear.
 - Monte Carlo draws are multivariate normal, so here it adds nothing beyond

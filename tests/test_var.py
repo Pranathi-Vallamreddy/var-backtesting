@@ -120,7 +120,7 @@ def test_ewma_on_portfolio_equals_ewma_covariance():
 def test_fhs_rescales_to_current_volatility():
     # same shocks, but the last 50 days at twice the volatility: FHS VaR
     # should rise well above plain historical VaR on the same sample
-    r = gaussian_returns(1_000)["a"].to_numpy()
+    r = gaussian_returns(1_000)["a"].to_numpy().copy()
     r[-50:] *= 2
     var_h, _ = var_hist(r, 0.99, V)
     var_f, _ = var_fhs(r, 0.99, V)

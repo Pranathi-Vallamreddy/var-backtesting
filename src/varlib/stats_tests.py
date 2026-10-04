@@ -96,10 +96,10 @@ def coverage_table(bt, test_size=0.05):
             "es_exc": g.loc[g["exception"], "es"].mean(),
         }
         if np.isclose(alpha, 0.99):
-            rolling = pd.Series(e).rolling(250).sum()
+            # with fewer than 250 forecasts both counts fall back to the full sample
             row["x_last250"] = int(e[-250:].sum())
             row["basel_zone"] = basel_zone(row["x_last250"])
-            row["x_worst250"] = int(rolling.max())
+            row["x_worst250"] = int(pd.Series(e).rolling(min(250, e.size)).sum().max())
             row["basel_zone_worst"] = basel_zone(row["x_worst250"])
         rows.append(row)
     return pd.DataFrame(rows)
