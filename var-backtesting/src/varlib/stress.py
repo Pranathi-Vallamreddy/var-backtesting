@@ -10,6 +10,10 @@ import pandas as pd
 
 from .var import var_all
 
+# EWMA and FHS are left out: they condition on volatility at the end of the
+# window, which is a point-in-time reading, not a calibration to the period
+METHODS = ["hist", "param", "t", "mc"]
+
 
 def stressed_var(returns, stress_returns, w, value, alphas, window=500, n_sims=50_000, seed=42):
     current = returns.iloc[-window:]
@@ -17,7 +21,7 @@ def stressed_var(returns, stress_returns, w, value, alphas, window=500, n_sims=5
     for alpha in alphas:
         cur = var_all(current, w, alpha, value, n_sims, seed)
         stressed = var_all(stress_returns, w, alpha, value, n_sims, seed)
-        for method in cur:
+        for method in METHODS:
             rows.append({
                 "alpha": alpha, "method": method,
                 "var": cur[method][0], "svar": stressed[method][0],

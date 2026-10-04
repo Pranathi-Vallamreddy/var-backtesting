@@ -69,6 +69,10 @@ def basel_zone(x):
 def coverage_table(bt, test_size=0.05):
     """One row per (alpha, method) from a run_backtest frame.
 
+    loss_exc / es_exc compare the mean realised loss on exception days with
+    the mean ES forecast on the same days; a ratio well above 1 means ES is
+    too low. It is a diagnostic, not a formal ES backtest.
+
     The Basel zone follows the regulatory convention: 99% VaR, exceptions
     counted over the most recent 250 days. Because our backtest is much
     longer than 250 days we also report the worst rolling 250-day count.
@@ -86,6 +90,10 @@ def coverage_table(bt, test_size=0.05):
             "lr_ind": lr_ind, "p_ind": p_ind,
             "lr_cc": lr_cc, "p_cc": p_cc,
             "reject_cc": p_cc < test_size,
+            # ES check: if ES is right, the average loss on exception days
+            # should be close to the average ES forecast on those days
+            "loss_exc": -g.loc[g["exception"], "pnl"].mean(),
+            "es_exc": g.loc[g["exception"], "es"].mean(),
         }
         if np.isclose(alpha, 0.99):
             rolling = pd.Series(e).rolling(250).sum()

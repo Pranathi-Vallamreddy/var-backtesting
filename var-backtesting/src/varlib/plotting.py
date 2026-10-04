@@ -6,8 +6,10 @@ import numpy as np
 from matplotlib.ticker import MaxNLocator
 from scipy import stats
 
-COLORS = {"hist": "#2a78d6", "param": "#eb6834", "t": "#1baf7a", "mc": "#eda100"}
-LABELS = {"hist": "Historical", "param": "Gaussian", "t": "Student-t", "mc": "Monte Carlo"}
+COLORS = {"hist": "#2a78d6", "param": "#eb6834", "t": "#1baf7a", "mc": "#eda100",
+          "ewma": "#e87ba4", "fhs": "#008300"}
+LABELS = {"hist": "Historical", "param": "Gaussian", "t": "Student-t", "mc": "Monte Carlo",
+          "ewma": "EWMA", "fhs": "Filtered HS"}
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
 
 plt.rcParams.update({
@@ -19,7 +21,7 @@ plt.rcParams.update({
 })
 
 
-def plot_var_vs_loss(bt, path, alpha=0.99, methods=("hist", "param")):
+def plot_var_vs_loss(bt, path, alpha=0.99, methods=("hist", "param", "fhs")):
     """Realised daily loss against the VaR forecast, one panel per method."""
     fig, axes = plt.subplots(len(methods), 1, figsize=(10, 3.2 * len(methods)), sharex=True, sharey=True)
     for ax, m in zip(np.atleast_1d(axes), methods):
@@ -38,8 +40,12 @@ def plot_var_vs_loss(bt, path, alpha=0.99, methods=("hist", "param")):
     plt.close(fig)
 
 
-def plot_rolling_exceptions(bt, path, alpha=0.99):
-    """Exceptions over a trailing 250 days, with the Basel zone boundaries."""
+def plot_rolling_exceptions(bt, path, alpha=0.99, methods=("hist", "param", "ewma", "fhs")):
+    """Exceptions over a trailing 250 days, with the Basel zone boundaries.
+
+    Student-t and Monte Carlo are left out by default: MC tracks the Gaussian
+    almost exactly and the t sits just below it.
+    """
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.axhspan(-0.5, 4.5, color="#1baf7a", alpha=0.07, lw=0)
     ax.axhspan(4.5, 9.5, color="#eda100", alpha=0.10, lw=0)
@@ -48,12 +54,11 @@ def plot_rolling_exceptions(bt, path, alpha=0.99):
         ax.text(0.005, y, zone, transform=ax.get_yaxis_transform(), ha="left", va="center", color=MUTED)
 
     top = 0
-    for m in LABELS:
+    for m in methods:
         g = bt[(bt.method == m) & np.isclose(bt.alpha, alpha)].sort_values("date")
         rolling = g.exception.astype(int).rolling(250).sum()
         top = max(top, rolling.max())
-        # MC sits on top of the Gaussian line almost everywhere; dash it so both show
-        ax.plot(g.date, rolling, color=COLORS[m], lw=1.5, ls="--" if m == "mc" else "-", label=LABELS[m])
+        ax.plot(g.date, rolling, color=COLORS[m], lw=1.5, label=LABELS[m])
 
     ax.set_ylim(-0.5, top + 2)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
